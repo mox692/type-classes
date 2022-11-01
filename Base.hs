@@ -35,6 +35,26 @@ instance Applicative' Maybe where
     apply' (Just f) (Just x) = Just $ f x
 
 --
+-- Monad
+--
+class (Applicative m) => Monad' m where
+    return' :: a -> m a
+    bind' :: m a -> (a -> m b) -> m b
+
+instance Monad' [] where
+    return' = pure
+    bind' a f = case a of
+        [] -> []
+        -- TODO: f h : bind' t f だとErrorだったけど何でだ？...
+        h:t -> f h ++ bind' t f
+
+instance Monad' Maybe where
+    return' = pure
+    bind' a f = case a of
+        Nothing -> Nothing
+        Just x -> f x
+
+--
 -- Semigroup
 --
 class Semigroup' a where
@@ -81,14 +101,26 @@ instance Foldable' Maybe where
 --
 -- Traversable
 --
+
+-- MEMO: モノイドの結合演算子 <> を、Applicativeな型 f で一般化した、という風に見ることができる
+-- Ref: https://stackoverflow.com/questions/45798242/the-purpose-of-the-traversable-typeclass
 class (Functor' t, Foldable' t) => Traversable' t where
     traverse' :: Applicative' f => (a -> f b) -> t a -> f (t b)
+    sequenceA' :: Applicative' f => t (f a) -> f (t a)
 
 instance Traversable' [] where
     traverse' f [] = pure' []
     traverse' f (h:t) = pure' (:) `apply'` f h `apply'` traverse' f t
+    --ex1: traverse' (\s -> if s == 0 then Nothing else Just s) [1,2,3] ~> Just [1,2,3]
+    --ex2: traverse' (\s -> if s == 0 then Nothing else Just s) [1,2,3,0] ~> Nothing
+    --ex3: traverse' (\s -> [s]) $ Just 3 ~> [Just 3]  (あまり意味はなさそう)
+    sequenceA' = traverse' id  -- id は GHC.Baseですでに定義されている
+    --ex4: sequenceA' [Just 4, Just 5] ~> Just [4,5]
+
 
 -- MEMO: 正直List以外のTraversable'以外の使い道がよくわからない
 instance Traversable' Maybe where
     traverse' f Nothing = pure' Nothing
     traverse' f (Just x) = pure' Just `apply'` f x 
+
+    sequenceA' = traverse' id
